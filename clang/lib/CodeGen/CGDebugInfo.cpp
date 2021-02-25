@@ -491,6 +491,9 @@ unsigned CGDebugInfo::getLineNumber(SourceLocation Loc) {
   if (Loc.isInvalid())
     return 0;
   SourceManager &SM = CGM.getContext().getSourceManager();
+  if (SM.isMacroArgExpansion(Loc)) {
+    return SM.getSpellingLineNumber(Loc);
+  }
   return SM.getPresumedLoc(Loc).getLine();
 }
 
