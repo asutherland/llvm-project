@@ -172,7 +172,13 @@ void CGDebugInfo::setLocation(SourceLocation Loc) {
   if (Loc.isInvalid())
     return;
 
-  CurLoc = CGM.getContext().getSourceManager().getExpansionLoc(Loc);
+  SourceManager &SM = CGM.getContext().getSourceManager();
+  bool UseSpelling = SM.isMacroArgExpansion(Loc);
+  if (UseSpelling) {
+    CurLoc = SM.getSpellingLoc(Loc);
+  } else {
+    CurLoc = SM.getExpansionLoc(Loc);
+  }
 
   // If we've changed files in the middle of a lexical scope go ahead
   // and create a new lexical scope with file node if it's different
@@ -180,11 +186,12 @@ void CGDebugInfo::setLocation(SourceLocation Loc) {
   if (LexicalBlockStack.empty())
     return;
 
-  SourceManager &SM = CGM.getContext().getSourceManager();
   auto *Scope = cast<llvm::DIScope>(LexicalBlockStack.back());
-  PresumedLoc PCLoc = SM.getPresumedLoc(CurLoc);
-  if (PCLoc.isInvalid() || Scope->getFile() == getOrCreateFile(CurLoc))
-    return;
+  if (!UseSpelling) {
+    PresumedLoc PCLoc = SM.getPresumedLoc(CurLoc);
+    if (PCLoc.isInvalid() || Scope->getFile() == getOrCreateFile(CurLoc))
+      return;
+  }
 
   if (auto *LBF = dyn_cast<llvm::DILexicalBlockFile>(Scope)) {
     LexicalBlockStack.pop_back();
@@ -506,6 +513,9 @@ unsigned CGDebugInfo::getColumnNumber(SourceLocation Loc, bool Force) {
   if (Loc.isInvalid() && CurLoc.isInvalid())
     return 0;
   SourceManager &SM = CGM.getContext().getSourceManager();
+  if (SM.isMacroArgExpansion(Loc)) {
+    return SM.getSpellingColumnNumber(Loc);
+  }
   PresumedLoc PLoc = SM.getPresumedLoc(Loc.isValid() ? Loc : CurLoc);
   return PLoc.isValid() ? PLoc.getColumn() : 0;
 }
